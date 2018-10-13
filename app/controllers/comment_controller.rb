@@ -1,17 +1,7 @@
 # frozen_string_literal: true
 class CommentController < ApplicationController
   def create
-    create_comment(params[:comment])
-  end
-
-  def delete
-    delete_comment(Comment.where(id: params[:comment_id]).first)
-  end
-
-  private
-
-  def create_comment(comment)
-    comment_id = CommentService.create(comment, current_user)
+    comment_id = CommentService.create(params[:comment], current_user)
     response = {
       comment: generate_comments(Comment.where(id: comment_id)).first
     }
@@ -20,17 +10,21 @@ class CommentController < ApplicationController
     bad_request_response
   end
 
-  def delete_comment(comment)
+  def delete
+    comment = Comment.where(id: params[:comment_id]).first
     return bad_request_response if comment.nil?
 
     if %w[moment strategy].include?(comment.commentable_type)
-      delete_comment_moment_or_strategy(comment)
+      CommentService.delete(comment, current_user)
     elsif comment.commentable_type == 'meeting'
       delete_comment_meeting(comment)
-    else
-      bad_request_response
     end
+    render json: { id: comment.id }, status: :ok
+  rescue TypeError
+    bad_request_response
   end
+
+  private
 
   def bad_request_response
     render json: {}, status: :bad_request
@@ -51,21 +45,9 @@ class CommentController < ApplicationController
     remove_meeting_notification!(comment.id)
   end
 
-  def delete_comment_moment_or_strategy(comment)
-    comment_id = CommentService.delete(comment, current_user)
-    render json: { id: comment_id }, status: :ok
-  rescue TypeError
-    bad_request_response
-  end
-
   def delete_comment_meeting(comment)
-    if comment.present?
-      meeting_id = comment.commentable_id
-      meeting = Meeting.find_by(id: meeting_id)
-      remove_meeting_notification(comment, meeting)
-      render json: { id: comment.id }, status: :ok
-    else
-      bad_request_response
-    end
+    meeting_id = comment.commentable_id
+    meeting = Meeting.find_by(id: meeting_id)
+    remove_meeting_notification(comment, meeting)
   end
 end
